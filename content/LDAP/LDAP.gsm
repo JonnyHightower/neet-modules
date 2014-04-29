@@ -159,32 +159,115 @@ sub activate {
 		$SIG{'USR1'}=sub{
 			$self->SetScanInComplete("$name","$target");
 			Neet::threads->exit();
+			$MainScan->System("killall ldapsearch");
 		};
 
 		# And now the code for the actual test:
 
 		# <<< CODE GOES HERE >>>
+
+		# Null Bind to Base DN
+		my $namingContext;
 		my $output="${outputDir}/raw/ldapNull-${port}.txt";
 		my $rc=$MainScan->System($MainScan->getPath("ldapsearch") . " -h $host -p $port -x -D NULL > $output 2>&1");
+
 		$output="${outputDir}/raw/ldapBase-${port}.txt";
 		$MainScan->System($MainScan->getPath("ldapsearch") . " -h $host -p $port -x -s base > $output 2>&1");
+		my $scheme="ldap";
+		$scheme="ldaps" if ($port == 636);
 
+		my $F;
 		if (!$rc){
-			my $lines; my $trigger=10; # Lines
-			if (open(F,"$output")){
-				until (eof F){
-					my $line=readline(*F);
+			my $lines; my $trigger=10; # Number of lines that constitute real output
+			my $stopLookingForNamingContexts=0;
+			if (open($F,"$output")){
+				until (eof $F){
+					my $line=readline(*$F);
+					if (!$stopLookingForNamingContexts && $line =~ /^namingContexts: DC=/){
+						$stopLookingForNamingContexts=1;
+						my ($junk,$data)=split (" DC=", $line, 2);
+						chomp $data;
+						$namingContext="DC=" . $data;
+					}
 					$lines++;
-					last if ($lines == $trigger);
 				}
-				close F;
+				close $F;
 			}
-			if ($lines == $trigger){
+			if ($lines >= $trigger){
 				$MainScan->ConfigError($target,"issue","GSM-LDAP-1","LDAP server allowed anonymous access to a NULL base");
 				$MainScan->System("mv $output $outputDir/");
 			}
 		}
 
+		if ($namingContext){
+			$MainScan->SetListItem("$outputDir/hostInfo.txt","LDAPNamingContext: $namingContext");
+		}
+
+		# Try default credentials. Add extra creds as array elements of the form "username:password"
+		my @credentials = ("orcladmin:welcome","cn=orcladmin:welcome");
+		my @success;
+		# Iterate over the credentials and test them
+		my $i=0;
+		for my $credential (@credentials){
+			my ($user,$pass) = split (":", $credential, 2);
+			# Blank passwods won't work
+			next if (!$pass);
+			# Test the credentials first
+			my $output="${outputDir}/raw/ldapCredTest-${i}-${port}.txt";
+			$i++;
+			my $rc=$MainScan->System($MainScan->getPath("ldapsearch") . " -LLL -H ${scheme}://${host}:$port -s base -D \'$user\' -w \'$pass\' > $output 2>&1");
+			if ($rc > 1){
+				# Authentication failure
+				next;
+			}
+			if (open($F,"$output")){
+				until (eof $F){
+					my $line=readline(*$F);
+					if (!$stopLookingForNamingContexts && $line =~ /^namingContexts: DC=/){
+						$stopLookingForNamingContexts=1;
+						my ($junk,$data)=split (" DC=", $line, 2);
+						chomp $data;
+						$namingContext="DC=" . $data;
+					}
+				}
+				close $F;
+			}
+			my $message="LDAP server found with default credentials.";
+			$MainScan->StoreGuessedPassword($target, "vuln", "LDAP", "$user", "$pass", "GSM-LDAP-2", $message);
+			push @success, $credential;
+		}
+
+		if ($namingContext){
+			$MainScan->SetListItem("$outputDir/hostInfo.txt","LDAPNamingContext: $namingContext");
+		}
+
+		# Use any credentials that worked to enumerate what we can from the LDAP
+		for my $credential (@success){
+			last if (!$namingContext);
+			my ($user,$pass) = split (":", $credential, 2);
+			my $namingContextFileName=$namingContext;
+			$namingContextFileName =~ s/dc=/\./gi;
+			$namingContextFileName =~ s/,//g;
+			$namingContextFileName =~ s/^.//g;
+
+			# You can set up multiple queries which will be run sequentially against the LDAP
+			# with the credentials found.
+			my @queries = ("computers:objectclass=computer");
+
+			for my $querydata (@queries){
+				my ($file,$query) = split (":", $querydata, 2);
+				my $output=$MainScan->ResultsDirectory . "/ldapQuery-$namingContextFileName-${file}.txt";
+				# Don't run this query again if it already exists IN THIS NAMING CONTEXT
+				last if (-f $output);
+				my $rc=$MainScan->System($MainScan->getPath("ldapsearch") . " -LLL -H ${scheme}://${host}:$port -b \'$namingContext\' -D \'$user\' -w \'$pass\' \'($query)\' > $output 2>&1");
+				if ($rc > 1){
+					# Authentication failure
+					next;
+				}
+			}
+			# Stop here - we only want to try this with a single credential
+			last;
+		}
 		#>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>
 		#>>>>>>>>>>>>> End of module-specific code >>>>>>>>>>>>>>
 		#>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>
