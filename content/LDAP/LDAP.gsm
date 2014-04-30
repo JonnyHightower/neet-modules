@@ -166,6 +166,9 @@ sub activate {
 
 		# <<< CODE GOES HERE >>>
 
+		# File containing a list of default credentials to check
+		my $credentialsFile="${resourceDir}/defaultCredentials";
+
 		# Null Bind to Base DN
 		my $namingContext;
 		my $output="${outputDir}/raw/ldapNull-${port}.txt";
@@ -203,16 +206,19 @@ sub activate {
 			$MainScan->SetListItem("$outputDir/hostInfo.txt","LDAPNamingContext: $namingContext");
 		}
 
-		# Try default credentials. Add extra creds as array elements of the form "username:password"
-		my @credentials = ("orcladmin:welcome","cn=orcladmin:welcome");
+		# Try default credentials. Add extra creds to the text file in the format "username:password"
+		# One username/password pair per line
+		my @credentials = $MainScan->ReadFile($credentialsFile);
 		my @success;
 		# Iterate over the credentials and test them
 		my $i=0;
 		for my $credential (@credentials){
+			# Skip lines that begin with whitespace
+			next if ($credential =~ /^\s/);
+			chomp $credential;
 			my ($user,$pass) = split (":", $credential, 2);
 			# Blank passwods won't work
 			next if (!$pass);
-			# Test the credentials first
 			my $output="${outputDir}/raw/ldapCredTest-${i}-${port}.txt";
 			$i++;
 			my $rc=$MainScan->System($MainScan->getPath("ldapsearch") . " -LLL -H ${scheme}://${host}:$port -s base -D \'$user\' -w \'$pass\' > $output 2>&1");
