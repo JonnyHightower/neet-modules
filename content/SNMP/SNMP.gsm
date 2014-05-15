@@ -98,6 +98,7 @@ sub activate {
 	my ($host,$protport) = split (":", $target);
 	my $socket=$host;
 	my ($protocol,$port);
+	my $credentialManager=$MainScan->CredentialManager;
 	my $outputDir=$MainScan->ResultsDirectory . "/$host";
 	my $resourceDir=$MainScan->ResourceDirectory . "/modules/$name";
 	my ($targetType,$interface)=$MainScan->IsHostLocal($host);
@@ -201,7 +202,17 @@ sub activate {
 							} else {
 								#$Log->Vuln ("GSM thread $threadID ($name -> $target): -> GOT MIB using string \"$string\"\n");
 								my $message="Host allowed the SNMP MIB to be read using the community string \"$string\"";
-								$MainScan->StoreGuessedPassword($target,"vuln", "SNMP","nouser","$string","GSM-SNMP-RD",$message);
+								#$MainScan->StoreGuessedPassword($target,"vuln", "SNMP","nouser","$string","GSM-SNMP-RD",$message);
+								# Instead of storing it in a flat file, use the credential manager
+								$credentialManager->addCredential(
+									'type' => 'snmp',
+									'pass' => "$string",
+									'system' => "$host",
+									'privilege' => 'low',
+									'comment' => uc($protocol) . "/$port (GSM:$name)"
+								);
+								$MainScan->RecordVulnerability($target, "GSM-SNMP-RD",$message);
+
 								$self->SetScanComplete($name . "getmib",$target);
 								$MainScan->SetStatValue($MainScan->ResultsDirectory . "/readSNMP.txt",$target,$string);
 							}

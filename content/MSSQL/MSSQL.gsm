@@ -98,6 +98,7 @@ sub activate {
 	my ($host,$protport) = split (":", $target);
 	my $socket=$host;
 	my ($protocol,$port);
+	my $credentialManager=$MainScan->CredentialManager;
 	my $BasePrefix=$Config->GetVal("BasePrefix");
 	my $outputDir=$MainScan->ResultsDirectory . "/$host";
 	my $resourceDir=$MainScan->ResourceDirectory . "/modules/$name";
@@ -185,7 +186,18 @@ sub activate {
 							$pass="";
 						}
 						my $message="Logged into MS-SQL server with $account $pass";
-						$MainScan->StoreGuessedPassword($target, "vuln", "MSSQL", "$account", "$pass", "GSM-MSSQL-1", $message);
+						#$MainScan->StoreGuessedPassword($target, "vuln", "MSSQL", "$account", "$pass", "GSM-MSSQL-1", $message);
+						# Instead of storing it in a flat file, use the credential manager
+						$credentialManager->addCredential(
+							'type' => 'mssql',
+							'user' => "$account",
+							'pass' => "$pass",
+							'system' => "$host",
+							'privilege' => 'high',
+							'comment' => uc($protocol) . "/$port (GSM:$name)"
+						);
+						$MainScan->RecordVulnerability($target, "GSM-MSSQL-1",$message);
+
 						# Test the permissions of the account (can we execute OS commands?)
 						use JR::iShell::iShellSQL;
 						my $shell;
