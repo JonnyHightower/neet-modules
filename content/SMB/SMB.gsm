@@ -97,6 +97,7 @@ sub activate {
 	my $Log=$MainScan->Log;
 	my ($host,$protport) = split (":", $target);
 	my $socket=$host;
+	my $credentialManager=$MainScan->CredentialManager;
 	my ($protocol,$port);
 	my $outputDir=$MainScan->ResultsDirectory . "/$host";
 	my $resourceDir=$MainScan->ResourceDirectory . "/modules/$name";
@@ -549,13 +550,30 @@ sub activate {
 						next if ($line !~ /ACCOUNT FOUND/);
 						if ($line =~ /\s\[SUCCESS\]\s/){
 							my ($user,$password)=parseMedusa($line);
-							#print "Guessed password for $user: \"$password\"\n";
-							$MainScan->StoreGuessedPassword($target,"comp","SMB",$user,"\"$password\"","GSM-SMB-6","Logged in as $user password \"$password\"");
+							#$MainScan->StoreGuessedPassword($target,"comp","SMB",$user,"\"$password\"","GSM-SMB-6","Logged in as $user password \"$password\"");
+							# Instead of storing it a in plain text file, use the credential manager
+							$credentialManager->addCredential(
+								'type' => 'smb',
+								'user' => "$user",
+								'pass' => "$password",
+								'system' => "$host",
+								'comment' => uc($protocol) . "/$port (GSM:$name)"
+							);
+							$MainScan->RecordVulnerability($target, "GSM-SMB-6", "Logged in as $user password \"$password\"");
 							next;
 						}
 						if ($line =~ /STATUS_ACCOUNT_DISABLED/){
 							my ($user,$password)=parseMedusa($line);
 							$MainScan->SetListItem("$outputDir/hostInfo.txt","DisabledAccount: $user");
+							$credentialManager->addCredential(
+								'type' => 'smb',
+								'user' => "$user",
+								'pass' => "$password",
+								'system' => "$host",
+								'privilege' => 'low',
+								'tag' => 'locked',
+								'comment' => uc($protocol) . "/$port (GSM:$name)"
+							);
 							#print "$user: account is disabled.\n";
 							next;
 						}
