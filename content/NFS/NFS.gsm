@@ -192,7 +192,7 @@ sub activate {
 				my $tmpDir=$dir; $tmpDir=~s?/?-?g; $tmpDir=~s/^-//;
 				$MainScan->System("/bin/mkdir -p /mnt/${host}/$tmpDir");
 				if (-d "/mnt/${host}/$tmpDir"){
-					my $error=$MainScan->TimedSystem($Timeout,"/bin/mount ${host}:$dir /mnt/${host}/$tmpDir -t nfs -o nolock >/dev/null 2>&1");
+					my $error=$MainScan->TimedSystem($Timeout,"/bin/mount ${host}:$dir /mnt/${host}/$tmpDir -t nfs -o nolock -o vers=3 >/dev/null 2>&1");
 					if ($error==0){
 						$MainScan->ConfigError($target, "vuln", "GSM-NFS-1", "Mounted NFS export $dir");
 						mkdir "${outputDir}/NFS";
