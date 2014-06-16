@@ -98,6 +98,7 @@ sub activate {
 	my ($host,$protport) = split (":", $target);
 	my $socket=$host;
 	my ($protocol,$port);
+	my $credentialManager=$MainScan->CredentialManager;
 	my $BasePrefix=$Config->GetVal("BasePrefix");
 	my $outputDir=$MainScan->ResultsDirectory . "/$host";
 	my $resourceDir=$MainScan->ResourceDirectory . "/modules/$name";
@@ -198,7 +199,16 @@ sub activate {
 					$data{"$SID"}{'accounts'}=$accounts;
 					$compromised=1;
 					my $message="Logged into Oracle database SID $SID with $user:$pass";
-					$MainScan->StoreGuessedPassword($target,"vuln", "Oracle","${SID}|$user","$pass","GSM-Oracle-1",$message);
+					#$MainScan->StoreGuessedPassword($target,"vuln", "Oracle","${SID}|$user","$pass","GSM-Oracle-1",$message);
+					# Instead of storing it in a flat file, use the credential manager
+					$credentialManager->addCredential(
+						'type' => 'oracle',
+						'user' => "$user",
+						'pass' => "$pass",
+						'system' => "$host",
+						'rid' => "$SID",
+						'comment' => uc($protocol) . "/$port SID $SID (GSM:$name)"
+					);
 				}
 			}
 

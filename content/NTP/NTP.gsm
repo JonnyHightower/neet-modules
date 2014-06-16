@@ -166,23 +166,26 @@ sub activate {
 		# <<< CODE GOES HERE >>>
 		# If the offset is more than 5400 seconds, warn about it.
 		my $offsetHighLevel = 5400;
-
-		my $command=$MainScan->getPath("ntpdate") . " -q ${host}";
-		my $outputfile="$outputDir/raw/NTP.txt";
-		my $error=$MainScan->System("$command > $outputfile 2>&1");
-		if (!$error){
-			my @data=$MainScan->ReadFile($outputfile);
-			for my $line (@data){
-				if ($line =~ / offset \d+\.\d+,/){
-					my $textOffset = index($line," offset ") + 8;
-					my $offset = substr($line,$textOffset,(rindex($line,",") - $textOffset));
-					if ($offset > $offsetHighLevel){
-						my $message="NTP Server with time offset of $offset seconds";
-						$MainScan->RecordIssue($target,"GSM-NTP-1",$message);
+		my $ntpdate=$MainScan->getPath("ntpdate");
+		if ($ntpdate){
+			my $command="$ntpdate -q ${host}";
+			my $outputfile="$outputDir/raw/NTP.txt";
+			my $error=$MainScan->System("$command > $outputfile 2>&1");
+			if (!$error){
+				my @data=$MainScan->ReadFile($outputfile);
+				for my $line (@data){
+					if ($line =~ / offset \d+\.\d+,/){
+						my $textOffset = index($line," offset ") + 8;
+						my $offset = substr($line,$textOffset,(rindex($line,",") - $textOffset));
+						if ($offset > $offsetHighLevel){
+							my $message="NTP Server with time offset of $offset seconds";
+							$MainScan->RecordIssue($target,"GSM-NTP-1",$message);
+						}
+						last;
 					}
-					last;
 				}
 			}
+
 		}
 
 		#>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>

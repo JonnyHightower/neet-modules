@@ -59,6 +59,7 @@ sub activate {
 	my ($host,$protport) = split (":", $target);
 	my $socket=$host;
 	my ($protocol,$port);
+	my $credentialManager=$MainScan->CredentialManager;
 	my $outputDir=$MainScan->ResultsDirectory . "/$host";
 	my $resourceDir=$MainScan->ResourceDirectory . "/modules/$name";
 	my ($targetType,$interface)=$MainScan->IsHostLocal($host);
@@ -144,7 +145,15 @@ sub activate {
 
 		if ($login){
 			my $message="FTP Host supports anonymous login with $u:$p";
-			$MainScan->StoreGuessedPassword($target,"vuln", "FTP","$u","$p","GSM-FTP-1",$message);
+			#$MainScan->StoreGuessedPassword($target,"vuln", "FTP","$u","$p","GSM-FTP-1",$message);
+			# Instead of storing it in a flat file, use the credential manager
+			$credentialManager->addCredential(
+				'type' => 'fto',
+				'user' => "$u",
+				'pass' => "$p",
+				'system' => "$host",
+				'comment' => uc($protocol) . "/$port (GSM:$name)"
+			);
 		}
 
 		#>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>

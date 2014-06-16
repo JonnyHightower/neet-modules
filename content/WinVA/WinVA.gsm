@@ -135,7 +135,7 @@ sub activate {
 
 	if (!$self->IsScanComplete("$name","$target")){
 		# Tell the user what we're doing
-		$Log->Status ("GSM $name (thread $threadID) -> Scanning $socket ($targetType $interface [$OS])\n");
+		$Log->Status ("GSM $name (thread $threadID) -> Scanning $socket ($targetType $interface)\n");
 
 		#>>>>>>>>>>>>     >>>>>>>>>>>>>   >>>>>>>>>>>>>   >>>>>>>>>>>>>
 		#>>>>>>>>>>>>> Beginning of module-specific code >>>>>>>>>>>>>>
