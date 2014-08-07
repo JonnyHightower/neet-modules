@@ -239,7 +239,18 @@ sub activate {
 				close $F;
 			}
 			my $message="LDAP server found with default credentials.";
-			$MainScan->StoreGuessedPassword($target, "vuln", "LDAP", "$user", "$pass", "GSM-LDAP-2", $message);
+			#$MainScan->StoreGuessedPassword($target, "vuln", "LDAP", "$user", "$pass", "GSM-LDAP-2", $message);
+			# Instead of storing it in a flat file, use the credential manager
+			my $comment = uc($protocol) . "/$port (GSM:$name)";
+			$comment .= " Naming context: $namingContext" if ($namingContext);
+
+			$credentialManager->addCredential(
+				'type' => 'ldap',
+				'user' => "$user",
+				'pass' => "$pass",
+				'system' => "$host",
+				'comment' => "$comment"
+			);
 			push @success, $credential;
 		}
 

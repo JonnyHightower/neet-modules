@@ -168,13 +168,12 @@ sub activate {
 	     	if (-f "/etc/slackware-version"){
 	        	# Slackware
 		  		$MainScan->System ("/bin/sh /etc/rc.d/rc.rpc start >/dev/null 2>&1");
+	 			} elsif ( -f "/etc/init.d/nfs-common"){ # Debian
+	  			$MainScan->System ("/etc/init.d/nfs-common start >/dev/null");
 	     	} else {
-				if (`/etc/init.d/portmap status` !~ /started/){ # GENTOO
+				if ((-f "/etc/init.d/portmap") && (`/etc/init.d/portmap status` !~ /started/)){ # GENTOO
 	  				$MainScan->System ("/etc/init.d/portmap start >/dev/null 2>&1");
 		  		}
-	 			#if ( -f "/etc/init.d/nfs-common"){ # Debian
-	  			#	$MainScan->System ("/etc/init.d/nfs-common start >/dev/null");
-	  			#}
 	     	}
 			$Log->Warn ("GSM thread $threadID ($name -> $target): Started local portmap service\n");
 			$MainScan->System ("/sbin/showmount -e $host > ${outputDir}/nfsExports.txt 2>&1");
@@ -192,7 +191,7 @@ sub activate {
 				my $tmpDir=$dir; $tmpDir=~s?/?-?g; $tmpDir=~s/^-//;
 				$MainScan->System("/bin/mkdir -p /mnt/${host}/$tmpDir");
 				if (-d "/mnt/${host}/$tmpDir"){
-					my $error=$MainScan->TimedSystem($Timeout,"/bin/mount ${host}:$dir /mnt/${host}/$tmpDir -t nfs -o nolock >/dev/null 2>&1");
+					my $error=$MainScan->TimedSystem($Timeout,"/bin/mount ${host}:$dir /mnt/${host}/$tmpDir -t nfs -o nolock -o vers=3 >/dev/null 2>&1");
 					if ($error==0){
 						$MainScan->ConfigError($target, "vuln", "GSM-NFS-1", "Mounted NFS export $dir");
 						mkdir "${outputDir}/NFS";

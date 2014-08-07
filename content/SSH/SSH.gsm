@@ -98,6 +98,7 @@ sub activate {
 	my ($host,$protport) = split (":", $target);
 	my $socket=$host;
 	my ($protocol,$port);
+	my $credentialManager=$MainScan->CredentialManager;
 	my $BasePrefix=$Config->GetVal("BasePrefix");
 	my $outputDir=$MainScan->ResultsDirectory . "/$host";
 	my $resourceDir=$MainScan->ResourceDirectory . "/modules/$name";
@@ -201,7 +202,15 @@ sub activate {
 						$password=$line;
 						$password =~ s/^[\S\s]+\s+\|\s+([\S\s]+)\|[\S\s]+\|[\S\s]+$/$1/;
 						$password =~ s/\s+$//g;
-						$MainScan->StoreGuessedPassword($target,"comp","SSH",$username,$password,"GSM-SSH-1","Logged in as $username password $password");
+						#$MainScan->StoreGuessedPassword($target,"comp","SSH",$username,$password,"GSM-SSH-1","Logged in as $username password $password");
+						# Instead of storing it in a flat file, use the credential manager
+						$credentialManager->addCredential(
+							'type' => 'ssh',
+							'user' => "$username",
+							'pass' => "$password",
+							'system' => "$host",
+							'comment' => uc($protocol) . "/$port (GSM:$name)"
+						);
 						last;
 					}
 				}
