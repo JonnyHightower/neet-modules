@@ -198,9 +198,6 @@ sub activate {
 					$accounts++;
 					$data{"$SID"}{'accounts'}=$accounts;
 					$compromised=1;
-					my $message="Logged into Oracle database SID $SID with $user:$pass";
-					#$MainScan->StoreGuessedPassword($target,"vuln", "Oracle","${SID}|$user","$pass","GSM-Oracle-1",$message);
-					# Instead of storing it in a flat file, use the credential manager
 					$credentialManager->addCredential(
 						'type' => 'oracle',
 						'user' => "$user",
@@ -212,19 +209,10 @@ sub activate {
 				}
 			}
 
-			## List the SIDs with compromised accounts
-			#if ($compromised && open(ORA,">${outputDir}/oracleAccounts-${port}.txt")){
-			#	for my $sid (keys(%data)){
-			#		print ORA "*** SID: $sid ***\n";
-			#		my $accounts=$data{"$sid"}{'accounts'};
-			#		for (my $a=0; $a<$accounts; $a++){
-			#			my $user=$data{"$sid"}{'user'}{$a};
-			#			my $pass=$data{"$sid"}{'pass'}{$a};
-			#			print ORA "$user:$pass\n";
-			#		}
-			#	}
-			#	close ORA;
-			#}
+			if ($compromised){
+				my $message="Logged into Oracle database SID $SID - run \"accounts\" to view credentials.";
+				$MainScan->RecordVulnerability($target, "GSM-Oracle-1", $message);
+			}
 		}
 
 		#>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>

@@ -145,8 +145,7 @@ sub activate {
 
 		if ($login){
 			my $message="FTP Host supports anonymous login with $u:$p";
-			#$MainScan->StoreGuessedPassword($target,"vuln", "FTP","$u","$p","GSM-FTP-1",$message);
-			# Instead of storing it in a flat file, use the credential manager
+			$MainScan->RecordVulnerability($target, "GSM-FTP-1", $message);
 			$credentialManager->addCredential(
 				'type' => 'fto',
 				'user' => "$u",
@@ -154,6 +153,7 @@ sub activate {
 				'system' => "$host",
 				'comment' => uc($protocol) . "/$port (GSM:$name)"
 			);
+
 		}
 
 		#>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>

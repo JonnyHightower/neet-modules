@@ -211,7 +211,7 @@ sub activate {
 		my @credentials = $MainScan->ReadFile($credentialsFile);
 		my @success;
 		# Iterate over the credentials and test them
-		my $i=0;
+		my ($compromised,$i)=(0,0);
 		for my $credential (@credentials){
 			# Skip lines that begin with whitespace
 			next if ($credential =~ /^\s/);
@@ -238,7 +238,7 @@ sub activate {
 				}
 				close $F;
 			}
-			my $message="LDAP server found with default credentials.";
+			$compromised=1;
 			#$MainScan->StoreGuessedPassword($target, "vuln", "LDAP", "$user", "$pass", "GSM-LDAP-2", $message);
 			# Instead of storing it in a flat file, use the credential manager
 			my $comment = uc($protocol) . "/$port (GSM:$name)";
@@ -252,6 +252,11 @@ sub activate {
 				'comment' => "$comment"
 			);
 			push @success, $credential;
+		}
+
+		if ($compromised){
+			my $message="LDAP server found with default credentials.";
+			$MainScan->RecordVulnerability($target, "GSM-LDAP-1", $message);
 		}
 
 		if ($namingContext){

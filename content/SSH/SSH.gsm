@@ -211,6 +211,9 @@ sub activate {
 							'system' => "$host",
 							'comment' => uc($protocol) . "/$port (GSM:$name)"
 						);
+
+						my $message="Logged in as $username password $password";
+						$MainScan->RecordCompromise($target, "GSM-SSH-1", $message);
 						last;
 					}
 				}
