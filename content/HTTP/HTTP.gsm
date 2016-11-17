@@ -169,14 +169,16 @@ sub activate {
 		my $screenshotTimeout=25; # Seconds
 		my $SSL=0;
 		my $VirtualHost=undef;
+		my $defaultDirbList="NEET/common.txt";
 
 		if ("$file" eq "https.txt"){
 			$SSL=1;
+
 			my $sslscan=$MainScan->getPath("sslscan");
 			if ($sslscan && !$self->IsScanComplete("${name}_ssl",$target)){
-				my $error=$MainScan->System($MainScan->getPath("sslscan") . " $socket > ${outputDir}/raw/sslscan-${socket}.txt 2>&1");
+				my $error=$MainScan->System($MainScan->getPath("sslscan") . " $socket > ${outputDir}/raw/sslscan-${port}.txt 2>&1");
 				if (!$error){
-					my @ciphers=$MainScan->ReadFile("${outputDir}/raw/sslscan-${socket}.txt");
+					my @ciphers=$MainScan->ReadFile("${outputDir}/raw/sslscan-${port}.txt");
 					my ($pref,$weak,$two,$badpref,$null,$prefnull)=(0,0,0,0,0,0);
 					for my $cipher (@ciphers){
 						if ($cipher =~ /Prefered Server Cipher/){
@@ -228,6 +230,42 @@ sub activate {
 			} else {
 				$Log->Status("GSM thread $threadID ($name -> $target): Already checked SSL ciphers - skipping","LOGONLY");
 			}
+
+			if (-x "/opt/neet/pkg/testssl/testssl.sh" && !$self->IsScanComplete("${name}_testssl-$port",$target)){
+				$MainScan->System("/opt/neet/pkg/testssl/testssl.sh" . " $socket > ${outputDir}/raw/testssl-${port}.txt 2>&1");
+				if (-f "${outputDir}/raw/testssl-${port}.txt"){
+					my @output=$MainScan->ReadFile("${outputDir}/raw/testssl-${port}.txt");
+					for my $line (@output){
+						if ($line =~ /CRIME/ && $line =~ /is vulnerable/){
+							my $message="SSL service vulnerable to CRIME";
+							$MainScan->RecordVulnerability($target,"GSM-HTTPS-7",$message);
+							next;
+						}
+						if ($line =~ /BREACH/ && $line =~ /is vulnerable/){
+							my $message="SSL service vulnerable to BREACH";
+							$MainScan->RecordVulnerability($target,"GSM-HTTPS-8",$message);
+							next;
+						}
+						if ($line =~ /Heartbleed/ && $line !~ /\(ok\)/){
+							my $message="SSL service vulnerable to Heartbleed";
+							$MainScan->RecordVulnerability($target,"GSM-HTTPS-9",$message);
+							next;
+						}
+						if ($line =~ /\sCCS\s/ && $line =~ /VULNERABLE/){
+							my $message="SSL service vulnerable to Change Cipher Spec";
+							$MainScan->RecordVulnerability($target,"GSM-HTTPS-10",$message);
+							next;
+						}
+						if ($line =~ /SSLv2/ && $line !~ /\(ok\)/){
+							my $message="SSL service supports SSLv2";
+							$MainScan->RecordVulnerability($target,"GSM-HTTPS-11",$message);
+							next;
+						}
+					}
+					$self->SetScanComplete("${name}_testssl-$port","$target");
+				}
+			}
+
 		}
 
 		# Record what we found on this port
@@ -341,6 +379,55 @@ sub activate {
 			}
 		}
 
+		# Run DIRB
+		my $dirb=$MainScan->getPath("dirb");
+		if ($dirb && -x "$dirb" && !$self->IsScanComplete("${name}_dirb-$port",$target)){
+			my $url="http://$socket";
+			if ("$file" eq "https.txt"){
+				$url =~ s/http/https/;
+			}
+
+			my @wordlists=$Config->GetClassValues("module.http.dirb.wordlist");
+			# Use the default wordlist unlist the user has specified others in the configuraation
+			# file
+			if ($#wordlists<0){
+				$Log->Warn("DIRB: No wordlists configured (add module.http.dirb.wordlist in neet config). Using default list.");
+				@wordlists=($defaultDirbList);
+			}
+
+			# Run dirb using each list
+			for my $wrdlist (@wordlists){
+				$wrdlist =~ s/\.\.//g;
+				$wrdlist =~ s/"//g;
+				$wrdlist =~ s?^NEET/?/opt/neet/resources/dirb/?;
+				if (! -f $wrdlist){
+					$Log->Warn("DIRB: wordlist \"$wrdlist\" not found!");
+					next;
+				}
+				$MainScan->System("$dirb $url \"$wrdlist\" -w -S >> ${outputDir}/raw/dirb-${port}.txt 2>&1");
+			}
+
+			# Did we get any results?
+			my ($list,$count)=(0,0);
+			if (-f "${outputDir}/raw/dirb-${port}.txt"){
+				for my $line ($MainScan->ReadFile("${outputDir}/raw/dirb-${port}.txt")){
+					if (index($line,"+ http")>-1){
+						$count++;
+					} elsif (index($line,"IS LISTABLE.")>-1){
+						$list++;
+					}
+				}
+			}
+			if ($list){
+				my $message="At least $list listable directories under $url. Check DIRB output.";
+				$MainScan->RecordIssue($target,"GSM-HTTP-6",$message);
+			}
+			if ($count>1){
+				my	$message="$count interesting URLS at $url. Check DIRB output.";
+				$MainScan->RecordIssue($target,"GSM-HTTP-7",$message);
+			}
+			$self->SetScanComplete("${name}_dirb-$port","$target");
+		}
 
 		#>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>
 		#>>>>>>>>>>>>> End of module-specific code >>>>>>>>>>>>>>

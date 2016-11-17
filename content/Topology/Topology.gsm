@@ -173,8 +173,8 @@ sub activate {
 			}
 		} else {
 			# Traceroute, ping -R, tcptraceroute and Forwarding checks
-			$MainScan->System($MainScan->getPath("traceroute") . " -I -m 20 -n -w 3 $host > ${outputDir}/topology/iCMPtraceroute.txt 2>&1");
-			$MainScan->System($MainScan->getPath("traceroute") . " -m 20 -n -w 3 $host > ${outputDir}/topology/uDPtraceroute.txt 2>&1");
+			$MainScan->System($MainScan->getPath("traceroute") . " -I -m 20 -w 3 $host > ${outputDir}/topology/iCMPtraceroute.txt 2>&1");
+			$MainScan->System($MainScan->getPath("traceroute") . " -m 20 -w 3 $host > ${outputDir}/topology/uDPtraceroute.txt 2>&1");
 			$MainScan->System($MainScan->getPath("tcptraceroute") . " $host 80 > ${outputDir}/topology/tCPtraceroute.txt 2>&1");
 			$MainScan->System("ping -R -c1 -n $host > ${outputDir}/topology/ping-R.txt 2>&1");
 		}

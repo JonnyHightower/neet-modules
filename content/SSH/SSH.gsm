@@ -163,17 +163,9 @@ sub activate {
 		};
 
 		# And now the code for the actual test:
-
-		# This check is now incorporated in the service discovery module
-		# Get the banner: See if we're supporting protocol 1
-		#my @banner=$MainScan->ReadFile("$outputDir/banners/${port}.txt");
-		#for my $line (@banner){
-		#	chomp $line;
-		#	if (index($line,"SSH-1.")==0){
-		#		$MainScan->ConfigError($host, "issue", "SSHProto", "Host supports SSH protocol 1.x");
-		#		last;
-		#	}
-		#}
+		# Do we run against Windows machines as well? 1=YES, 0=NO (Only Unix machines)
+		# CAUTION: This can cause account lockout!!
+		my $RunAgainstWindows=1;
 
 		my ($osDetermined,$unix)=(0,0);
 		# Do we know the OS, and is the target running Unix?
@@ -190,18 +182,18 @@ sub activate {
 
 		if ($osDetermined){
 			# Don't run anything if we don't know the OS
-			my $patator=$MainScan->getPath("patator.py");
-			my $output="$outputDir/raw/patator-$port.txt";
-			if ($patator && $unix){
+			my $medusa=$MainScan->getPath("medusa");
+			my $output="$outputDir/raw/medusa-$port.txt";
+			if ($medusa && ($unix || $RunAgainstWindows)){
 				my ($username,$password)=('root',"");
-				$MainScan->System("$patator ssh_login port=$port host=$host user=$username password=FILE0 0=$resourceDir/passwords.txt persistent=1 -x ignore:mesg='Authentication failed.' -x ignore,reset,retry:mesg='No existing session' -x quit:code=0 > $output 2>&1");
+				$MainScan->System("$medusa -h $host -u $username -P \"$resourceDir/passwords.txt\" -e ns -f -n $port -M ssh    > $output 2>&1");
 				@file=$MainScan->ReadFile($output);
 				for my $line (@file){
-					if (($line =~ /SSH/) && ($line !~ /Error/)){
+					if (($line =~ /ACCOUNT FOUND: \[ssh\]/)){
 						# Logged in
 						$password=$line;
-						$password =~ s/^[\S\s]+\s+\|\s+([\S\s]+)\|[\S\s]+\|[\S\s]+$/$1/;
-						$password =~ s/\s+$//g;
+						$password =~ s/^ACCOUNT FOUND: \[ssh\] Host: $host User: $username Password: ([\S\s]+) \[SUCCESS\]\s+$/$1/;
+						#$password =~ s/\s+$//g;
 						#$MainScan->StoreGuessedPassword($target,"comp","SSH",$username,$password,"GSM-SSH-1","Logged in as $username password $password");
 						# Instead of storing it in a flat file, use the credential manager
 						$credentialManager->addCredential(
@@ -218,6 +210,7 @@ sub activate {
 					}
 				}
 			}
+
 			$self->SetScanComplete("$name","$target");
 		}
 	} else {

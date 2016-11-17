@@ -114,20 +114,20 @@ sub activate {
   		};
   		alarm ($timeout);
   		eval {
-        print "Sending: $message" if ($DEBUG);
-        print $sock ("$message");
-        $response=<$sock>;
-        print "Response: $response" if ($DEBUG);
+	        print "Sending: $message" if ($DEBUG);
+	        print $sock ("$message");
+	        $response=<$sock>;
+	        print "Response: $response" if ($DEBUG);
   			alarm 0;
   		};
 
   		if ("$@" !~ /^TIMEOUT/){
   			$SIG{'ALRM'}='';
-  			if ($response =~ /^\d{3}\s/){
-				  ($code,$response) = split(" ", $response,2);
-          print "Code: $code Message: $response" if ($DEBUG);
+  			if ($response && $response =~ /^\d{3}\s/){
+				($code,$response) = split(" ", $response,2);
+          		print "Code: $code Message: $response" if ($DEBUG);
      			return ($code,$response);
-				}
+			}
   		} else {
   			$SIG{'ALRM'}='';
   			return (0,0);
@@ -168,10 +168,10 @@ sub activate {
               $smtpUser .= "@" . $domain;
             }
             ($code,$response)= SMTP($sock,"VRFY $smtpUser\r\n");
-  	  			if ($code =~ /^5/){
+  	  			if (defined($code) && $code =~ /^5/){
               $skip=1;
               last;
-  					} elsif ($code =~ /^25\d/ && $response !~ /Cannot VRFY /i){
+  					} elsif ((defined($code) && defined($response)) && $code =~ /^25\d/ && $response !~ /Cannot VRFY /i){
               if ("$user" eq "$randomString"){
                 $FalsePositive=1;
                 last;
@@ -197,10 +197,10 @@ sub activate {
               $smtpUser .= "@" . $domain;
             }
             ($code,$response)= SMTP($sock,"EXPN $smtpUser\r\n");
-  	  			if ($code =~ /^5/){
+  	  			if (defined($code) && $code =~ /^5/){
               $skip=1;
               last;
-  					} elsif ($code =~ /^25\d/ && $response !~ /Cannot EXPN /i){
+  					} elsif ((defined($code) && defined($response)) && $code =~ /^25\d/ && $response !~ /Cannot EXPN /i){
               if ("$user" eq "$randomString"){
                 $FalsePositive=1;
                 last;
@@ -236,7 +236,7 @@ sub activate {
 																	);
 			if ($sock){
 				($code,$response)= SMTP($sock,"");
-      	if ($code){
+      	if ($code && $response){
         	for my $element (split " ", $response){
           	if (($element =~ /\./) && ($element !~ /SMTP/)){
             	chomp $element;
@@ -257,7 +257,7 @@ sub activate {
           	  $smtpUser .= "@" . $domain;
           	}
           	($code,$response)= SMTP($sock,"EXPN $smtpUser\r\n");
-	  				if ($code =~ /^25\d/ && $response !~ /Cannot /i){
+	  				if ((defined($code) && defined($response)) && $code =~ /^25\d/ && $response !~ /Cannot /i){
           		push @validUsers, $user;
           	}
         	}
@@ -294,12 +294,12 @@ sub activate {
   	  	for my $user (@testUsers){
          	my $smtpUser=$user;
          	if ($expnUseDomain){
-           	$smtpUser .= "@" . $domain;
+           		$smtpUser .= "@" . $domain;
          	}
          	($code,$response)= SMTP($sock,"VRFY $smtpUser\r\n");
-	  			if ($code =~ /^25\d/ && $response !~ /Cannot /i){
-           	push @validUsers, $user;
-         	}
+	  			if (($code && $response) && $code =~ /^25\d/ && $response !~ /Cannot /i){
+		           	push @validUsers, $user;
+	         	}
        	}
 				close $sock;
     	}

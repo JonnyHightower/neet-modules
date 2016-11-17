@@ -163,58 +163,87 @@ sub activate {
 
 		# And now the code for the actual test:
 
-		my $sslscan=$MainScan->getPath("sslscan");
-		return 0 if (!$sslscan);
-		my $error=$MainScan->System("$sslscan $socket > ${outputDir}/raw/sslscan-${socket}.txt 2>&1");
-		if (!$error){
-			my @ciphers=$MainScan->ReadFile("${outputDir}/raw/sslscan-${socket}.txt");
-			my ($pref,$weak,$two,$badpref,$null,$prefnull)=(0,0,0,0,0,0);
-			for my $cipher (@ciphers){
-				if ($cipher =~ /Prefered Server Cipher/){
-					$pref=1; next;
+		# First of all, double check this isn't HTTPS. If it is, we'll let that module deal with it.
+		# Sometimes HTTPS isn't detected at an earlier stage, and ends up just being categorised "SSL".
+		my $wget=$MainScan->getPath("wget");
+		if ($wget){
+			my $error=$MainScan->System("$wget https://$socket/ --no-check-certificate -q " .
+																	"-O ${outputDir}/raw/sslwgetcheck-${port}.txt >/dev/null 2>&1");
+			if (!$error){
+				# This is HTTPS. Record that....
+				my $confirmed="${outputDir}/confirmedtcpports.txt";
+				$MainScan->SetStatValue("$confirmed",$port,"HTTPS [By SSL GSM/WGET]");
+
+				# List the service in the appropriate protocol file
+				my $_outfile=$MainScan->ResultsDirectory . "/services/https.txt";
+				my $string="${host}:${protocol}/$port";
+				if (!$MainScan->GetStatKey("$_outfile","${host}:${protocol}/$port")){
+					$MainScan->SetStatKey("$_outfile","$string")
 				}
-				if ($pref){
-					if ($cipher =~ /(NULL)/){
-						$prefnull=1; next;
-					}
-					if ($cipher =~ /(\s56 bits)|(\s40 bits)/){
-						$badpref=1;
-					}
-				}
-				if (($cipher =~ /Accepted/) && ($cipher =~ /(NULL)|(\s0 bits)/)){
-					$null=1; next;
-				}
-				if (($cipher =~ /Accepted/) && ($cipher =~ /(\s40 bits)|(\s56 bits)/)){
-					$weak=1; next;
-				}
-				if (($cipher =~ /Accepted/) && ($cipher =~ /SSLv2/)){
-					$two=1; next;
-				}
+
+				# Move the wget output to the banners directory
+				$MainScan->System("mv ${outputDir}/raw/sslwgetcheck-${port}.txt ${outputDir}/banners/${port}.txt");
+
+				# Our work here is done
+				$self->SetScanComplete("$name","$target");
+				return 0;
 			}
-			if ($weak && $null){
-				my $message="SSL service supports short keys and NULL ciphers";
-				$MainScan->RecordVulnerability($target,"GSM-SSL-1",$message);
-			} elsif ($weak){
-				my $message="SSL service supports short keys";
-				$MainScan->RecordIssue($target,"GSM-SSL-2",$message);
-			} elsif ($null){
-				my $message="SSL service supports NULL ciphers";
-				$MainScan->RecordVulnerability($target,"GSM-SSL-3",$message);
-			}
-			if ($two){
-				my $message="SSL service supports SSL protocol v2";
-				$MainScan->RecordVulnerability($target,"GSM-SSL-4",$message);
-			}
-			if ($prefnull){
-				my $message="SSL service negotiates NULL ciphers";
-				$MainScan->RecordVulnerability($target,"GSM-SSL-5",$message);
-			} elsif ($badpref){
-				my $message="SSL service negotiates insecure cipher suites";
-				$MainScan->RecordVulnerability($target,"GSM-SSL-6",$message);
-			}
-		} else {
-			$Log->Error("GSM thread $threadID ($name -> $target): Couldn't check SSL ciphers - error $error");
 		}
+
+		# Not HTTPS. Carry on.
+		my $sslscan=$MainScan->getPath("sslscan");
+		if ($sslscan){
+			my $error=$MainScan->System("$sslscan $socket > ${outputDir}/raw/sslscan-${port}.txt 2>&1");
+			if (!$error){
+				my @ciphers=$MainScan->ReadFile("${outputDir}/raw/sslscan-${port}.txt");
+				my ($pref,$weak,$two,$badpref,$null,$prefnull)=(0,0,0,0,0,0);
+				for my $cipher (@ciphers){
+					if ($cipher =~ /Prefered Server Cipher/){
+						$pref=1; next;
+					}
+					if ($pref){
+						if ($cipher =~ /(NULL)/){
+							$prefnull=1; next;
+						}
+						if ($cipher =~ /(\s56 bits)|(\s40 bits)/){
+							$badpref=1;
+						}
+					}
+					if (($cipher =~ /Accepted/) && ($cipher =~ /(NULL)|(\s0 bits)/)){
+						$null=1; next;
+					}
+					if (($cipher =~ /Accepted/) && ($cipher =~ /(\s40 bits)|(\s56 bits)/)){
+						$weak=1; next;
+					}
+					if (($cipher =~ /Accepted/) && ($cipher =~ /SSLv2/)){
+						$two=1; next;
+					}
+				}
+				if ($weak && $null){
+					my $message="SSL service supports short keys and NULL ciphers";
+					$MainScan->RecordVulnerability($target,"GSM-SSL-1",$message);
+				} elsif ($weak){
+					my $message="SSL service supports short keys";
+					$MainScan->RecordIssue($target,"GSM-SSL-2",$message);
+				} elsif ($null){
+					my $message="SSL service supports NULL ciphers";
+					$MainScan->RecordVulnerability($target,"GSM-SSL-3",$message);
+				}
+				if ($two){
+					my $message="SSL service supports SSL protocol v2";
+					$MainScan->RecordVulnerability($target,"GSM-SSL-4",$message);
+				}
+				if ($prefnull){
+					my $message="SSL service negotiates NULL ciphers";
+					$MainScan->RecordVulnerability($target,"GSM-SSL-5",$message);
+				} elsif ($badpref){
+					my $message="SSL service negotiates insecure cipher suites";
+					$MainScan->RecordVulnerability($target,"GSM-SSL-6",$message);
+				}
+			} else {
+				$Log->Error("GSM thread $threadID ($name -> $target): Couldn't check SSL ciphers - error $error");
+			}
+		}	
 
 		my $openssl=$MainScan->getPath("openssl");
 		my $vhost="";
@@ -256,6 +285,43 @@ sub activate {
 			$MainScan->RecordIssue($target,"GSM-SSL-7",$message);
 		}
 
+		if (-x "/opt/neet/pkg/testssl/testssl.sh" && !$self->IsScanComplete("${name}_testssl-$port",$target)){
+			$MainScan->System("/opt/neet/pkg/testssl/testssl.sh" . " $socket > ${outputDir}/raw/testssl-${port}.txt 2>&1");
+			if (-f "${outputDir}/raw/testssl-${port}.txt"){
+					my @output=$MainScan->ReadFile("${outputDir}/raw/testssl-${port}.txt");
+					for my $line (@output){
+						if ($line =~ /CRIME/ && $line =~ /is vulnerable/){
+							my $message="SSL service vulnerable to CRIME";
+							$MainScan->RecordVulnerability($target,"GSM-SSL-8",$message);
+							next;
+						}
+						if ($line =~ /BREACH/ && $line =~ /is vulnerable/){
+							my $message="SSL service vulnerable to BREACH";
+							$MainScan->RecordVulnerability($target,"GSM-SSL-9",$message);
+							next;
+						}
+						if ($line =~ /Heartbleed/ && $line !~ /\(ok\)/){
+							my $message="SSL service vulnerable to Heartbleed";
+							$MainScan->RecordVulnerability($target,"GSM-SSL-10",$message);
+							next;
+						}
+						if ($line =~ /\sCCS\s/ && $line =~ /VULNERABLE/){
+							my $message="SSL service vulnerable to Change Cipher Spec";
+							$MainScan->RecordVulnerability($target,"GSM-SSL-11",$message);
+							next;
+						}
+						if ($line =~ /SSLv2/ && $line !~ /\(ok\)/){
+							my $message="SSL service supports SSLv2";
+							$MainScan->RecordVulnerability($target,"GSM-SSL-12",$message);
+							next;
+						}
+					}
+
+
+
+				$self->SetScanComplete("${name}_testssl-$port","$target");
+			}
+		}
 
 		#>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>   >>>>>>>>>>>>
 		#>>>>>>>>>>>>> End of module-specific code >>>>>>>>>>>>>>

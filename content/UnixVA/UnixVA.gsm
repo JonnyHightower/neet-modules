@@ -224,7 +224,7 @@ sub activate {
 					$_vuln=1;
 				}
 
-				if ($rc == 99){
+				if ($rc && $rc == 99){
 					$Log->Warn("GSM thread $threadID ($name -> $target): $cname timed out","LOGONLY");
 				} else {
 					if ($_vuln){
